@@ -1,20 +1,55 @@
+import { db } from '../db';
+import { imageGenerationsTable, galleryImagesTable } from '../db/schema';
 import { type SaveToGalleryInput, type GalleryImage } from '../schema';
+import { eq, and } from 'drizzle-orm';
 
 export async function saveToGallery(input: SaveToGalleryInput): Promise<GalleryImage> {
-  // This is a placeholder declaration! Real code should be implemented here.
-  // The goal of this handler is to save a generated image to the user's personal gallery by:
-  // 1. Validating that the image generation belongs to the authenticated user
-  // 2. Checking if the image generation exists and is completed
-  // 3. Creating a gallery image record linking to the image generation
-  // 4. Setting the title (if provided) and public/private status
-  // 5. Returning the created gallery image record
-  
-  return {
-    id: 1,
-    user_id: input.user_id,
-    image_generation_id: input.image_generation_id,
-    title: input.title || null,
-    is_public: input.is_public || false,
-    created_at: new Date()
-  };
+  try {
+    // 1. Validate that the image generation exists, belongs to the user, and is completed
+    const imageGenerations = await db.select()
+      .from(imageGenerationsTable)
+      .where(
+        and(
+          eq(imageGenerationsTable.id, input.image_generation_id),
+          eq(imageGenerationsTable.user_id, input.user_id),
+          eq(imageGenerationsTable.status, 'completed')
+        )
+      )
+      .execute();
+
+    if (imageGenerations.length === 0) {
+      throw new Error('Image generation not found, does not belong to user, or is not completed');
+    }
+
+    // 2. Check if this image generation is already saved to gallery
+    const existingGalleryImages = await db.select()
+      .from(galleryImagesTable)
+      .where(
+        and(
+          eq(galleryImagesTable.image_generation_id, input.image_generation_id),
+          eq(galleryImagesTable.user_id, input.user_id)
+        )
+      )
+      .execute();
+
+    if (existingGalleryImages.length > 0) {
+      throw new Error('Image generation is already saved to gallery');
+    }
+
+    // 3. Create gallery image record
+    const result = await db.insert(galleryImagesTable)
+      .values({
+        user_id: input.user_id,
+        image_generation_id: input.image_generation_id,
+        title: input.title || null,
+        is_public: input.is_public || false
+      })
+      .returning()
+      .execute();
+
+    return result[0];
+  } catch (error) {
+    console.error('Save to gallery failed:', error);
+    throw error;
+  }
 }

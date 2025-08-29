@@ -1,13 +1,38 @@
+import { db } from '../db';
+import { galleryImagesTable } from '../db/schema';
 import { type DeleteGalleryImageInput } from '../schema';
+import { eq, and } from 'drizzle-orm';
 
 export async function deleteGalleryImage(input: DeleteGalleryImageInput): Promise<{ success: boolean }> {
-  // This is a placeholder declaration! Real code should be implemented here.
-  // The goal of this handler is to delete a gallery image by:
-  // 1. Validating the user owns the gallery image
-  // 2. Removing the gallery image record from the database
-  // 3. Optionally removing the physical image file if no other references exist
-  // 4. Returning success confirmation
-  // 5. Throwing an error if the image doesn't exist or doesn't belong to the user
-  
-  return { success: true };
+  try {
+    // First, check if the gallery image exists and belongs to the user
+    const existingImage = await db.select()
+      .from(galleryImagesTable)
+      .where(
+        and(
+          eq(galleryImagesTable.id, input.id),
+          eq(galleryImagesTable.user_id, input.user_id)
+        )
+      )
+      .execute();
+
+    if (existingImage.length === 0) {
+      throw new Error('Gallery image not found or does not belong to user');
+    }
+
+    // Delete the gallery image record
+    const result = await db.delete(galleryImagesTable)
+      .where(
+        and(
+          eq(galleryImagesTable.id, input.id),
+          eq(galleryImagesTable.user_id, input.user_id)
+        )
+      )
+      .execute();
+
+    return { success: true };
+  } catch (error) {
+    console.error('Gallery image deletion failed:', error);
+    throw error;
+  }
 }
